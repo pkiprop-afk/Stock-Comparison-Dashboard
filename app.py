@@ -65,5 +65,25 @@ with st.spinner("Fetching live data..."):
     data = {t: fetch_fundamentals(t) for t in TICKERS}
     history = {t: fetch_history(t) for t in TICKERS}
 
-st.success("Data loaded!")
-st.write(data["AAPL"])
+def fmt_mkt_cap(val):
+    if val is None:
+        return "N/A"
+    if val >= 1e12:
+        return f"${val/1e12:.2f}T"
+    if val >= 1e9:
+        return f"${val/1e9:.2f}B"
+    return f"${val/1e6:.2f}M"
+
+st.subheader("Fundamentals")
+cols = st.columns(len(TICKERS))
+for col, ticker in zip(cols, TICKERS):
+    d = data[ticker]
+    with col:
+        st.markdown(f"### {ticker}")
+        st.metric("Price",          f"${d['price']}"        if d['price']          is not None else "N/A",
+                                    f"{d['change_pct']}%"   if d['change_pct']     is not None else None)
+        st.metric("P/E (Forward)",  d['pe']                 if d['pe']             is not None else "N/A")
+        st.metric("EPS",            f"${d['eps']}"          if d['eps']            is not None else "N/A")
+        st.metric("Revenue Growth", f"{d['revenue_growth']}%" if d['revenue_growth'] is not None else "N/A")
+        st.metric("Net Margin",     f"{d['net_margin']}%"   if d['net_margin']     is not None else "N/A")
+        st.metric("Market Cap",     fmt_mkt_cap(d['mkt_cap']))
