@@ -87,3 +87,33 @@ for col, ticker in zip(cols, TICKERS):
         st.metric("Revenue Growth", f"{d['revenue_growth']}%" if d['revenue_growth'] is not None else "N/A")
         st.metric("Net Margin",     f"{d['net_margin']}%"   if d['net_margin']     is not None else "N/A")
         st.metric("Market Cap",     fmt_mkt_cap(d['mkt_cap']))
+
+st.subheader("1-Year Price Performance")
+
+fig = go.Figure()
+
+for ticker in TICKERS:
+    df = history[ticker]
+    # normalize to % return from start so all 3 are comparable
+    df_normalized = (df["Close"] / df["Close"].iloc[0] - 1) * 100
+
+    fig.add_trace(go.Scatter(
+        x=df.index,
+        y=df_normalized.round(2),
+        name=ticker,
+        line=dict(color=COLORS[ticker], width=2),
+        hovertemplate=f"<b>{ticker}</b><br>Date: %{{x|%b %d, %Y}}<br>Return: %{{y:.2f}}%<extra></extra>"
+    ))
+
+fig.update_layout(
+    yaxis_title="Return (%)",
+    xaxis_title="Date",
+    hovermode="x unified",
+    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+    margin=dict(l=0, r=0, t=40, b=0),
+    height=400,
+)
+
+fig.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.4)
+
+st.plotly_chart(fig, use_container_width=True)
