@@ -36,4 +36,4 @@ with st.spinner("Fetching live data..."):
     history = {t: fetch_history(t) for t in TICKERS}
 
 st.success("Data loaded!")
-st.write(data["AAPL"])
+st.write(data["APPL"])
