@@ -11,17 +11,38 @@ COLORS = {"APPL": "#378ADD", "GOOGL": "#1D9E75", "META": "#D85A30"}
 @st.cache_data(ttl=300)
 def fetch_fundamentals(ticker):
     stock = yf.Ticker(ticker)
-    info = stock.info
+    
+    # fast_info is more reliable than .info
+    fi = stock.fast_info
+
+    # get financials for margin + revenue growth
+    try:
+        income = stock.get_income_stmt(freq="yearly")
+        rev_current = income.loc["TotalRevenue"].iloc[0]
+        rev_prev    = income.loc["TotalRevenue"].iloc[1]
+        net_income  = income.loc["NetIncome"].iloc[0]
+        revenue_growth = (rev_current - rev_prev) / rev_prev
+        net_margin     = net_income / rev_current
+    except Exception:
+        revenue_growth = None
+        net_margin     = None
+
+    # P/E and EPS from fast_info
+    try:
+        pe  = round(fi.p_e_ratio, 2) if fi.p_e_ratio else None
+        eps = round(fi.last_price / fi.p_e_ratio, 2) if fi.p_e_ratio else None
+    except Exception:
+        pe, eps = None, None
+
     return {
-        "name": info.get("longName", ticker),
-        "price": info.get("currentPrice", 0),
-        "change_pct": info.get("regularMarketChangePercent", 0),
-        "pe": info.get("trailingPE", None),
-        "eps": info.get("trailingEps", None),
-        "revenue_growth": info.get("revenueGrowth", None),
-        "net_margin": info.get("profitMargins", None),
-        "mkt_cap": info.get("marketCap", None),
-        "fcf_yield": info.get("freeCashflow", None),
+        "name":           ticker,
+        "price":          round(fi.last_price, 2),
+        "change_pct":     round(fi.regular_market_previous_close, 2),
+        "pe":             pe,
+        "eps":            eps,
+        "revenue_growth": revenue_growth,
+        "net_margin":     net_margin,
+        "mkt_cap":        fi.market_cap,
     }
 
 @st.cache_data(ttl=300)
