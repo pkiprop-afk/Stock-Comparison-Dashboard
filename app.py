@@ -15,29 +15,38 @@ def fetch_fundamentals(ticker):
     # fast_info is more reliable than .info
     fi = stock.fast_info
 
-    # get financials for margin + revenue growth
+    try:
+        price = round(fi.last_price, 2)
+    except Exception:
+        price = None
+
+    try:
+        prev_close = fi.regular_market_previous_close
+        change_pct = round((fi.last_price - prev_close) / prev_close * 100, 2)
+    except Exception:
+        change_pct = None
+
+    try:
+        pe  = round(fi.forward_pe, 2)
+        eps = round(fi.last_price / fi.forward_pe, 2)
+    except Exception:
+        pe, eps = None, None
+
     try:
         income = stock.get_income_stmt(freq="yearly")
         rev_current = income.loc["TotalRevenue"].iloc[0]
         rev_prev    = income.loc["TotalRevenue"].iloc[1]
         net_income  = income.loc["NetIncome"].iloc[0]
-        revenue_growth = (rev_current - rev_prev) / rev_prev
-        net_margin     = net_income / rev_current
+        revenue_growth = round((rev_current - rev_prev) / rev_prev * 100, 2)
+        net_margin     = round(net_income / rev_current * 100, 2)
     except Exception:
         revenue_growth = None
         net_margin     = None
 
-    # P/E and EPS from fast_info
-    try:
-        pe  = round(fi.p_e_ratio, 2) if fi.p_e_ratio else None
-        eps = round(fi.last_price / fi.p_e_ratio, 2) if fi.p_e_ratio else None
-    except Exception:
-        pe, eps = None, None
-
     return {
         "name":           ticker,
-        "price":          round(fi.last_price, 2) if fi.last_price else None,
-        "change_pct":     round(fi.regular_market_previous_close, 2) if fi.regular_market_previous_close else None,
+        "price":          price,
+        "change_pct":     change_pct,
         "pe":             pe,
         "eps":            eps,
         "revenue_growth": revenue_growth,
