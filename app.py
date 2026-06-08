@@ -5,8 +5,8 @@ import pandas as pd
 
 st.set_page_config(page_title="Stock Dashboard", layout="wide")
 
-TICKERS = ["APPL", "GOOGL", "META"]
-COLORS = {"APPL": "#378ADD", "GOOGL": "#1D9E75", "META": "#D85A30"}
+TICKERS = ["AAPL", "GOOGL", "META"]
+COLORS = {"AAPL": "#378ADD", "GOOGL": "#1D9E75", "META": "#D85A30"}
 
 @st.cache_data(ttl=300)
 def fetch_fundamentals(ticker):
@@ -36,8 +36,8 @@ def fetch_fundamentals(ticker):
 
     return {
         "name":           ticker,
-        "price":          round(fi.last_price, 2),
-        "change_pct":     round(fi.regular_market_previous_close, 2),
+        "price":          round(fi.last_price, 2) if fi.last_price else None,
+        "change_pct":     round(fi.regular_market_previous_close, 2) if fi.regular_market_previous_close else None,
         "pe":             pe,
         "eps":            eps,
         "revenue_growth": revenue_growth,
@@ -57,4 +57,4 @@ with st.spinner("Fetching live data..."):
     history = {t: fetch_history(t) for t in TICKERS}
 
 st.success("Data loaded!")
-st.write(data["APPL"])
+st.write(data["AAPL"])
