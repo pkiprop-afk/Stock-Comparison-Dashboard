@@ -1,3 +1,5 @@
+import os
+from datetime import datetime
 import streamlit as st
 import yfinance as yf
 import plotly.graph_objects as go
@@ -5,14 +7,29 @@ import pandas as pd
 
 st.set_page_config(page_title="Stock Dashboard", layout="wide")
 
-TICKERS = ["AAPL", "GOOGL", "META"]
-COLORS = {"AAPL": "#378ADD", "GOOGL": "#1D9E75", "META": "#D85A30"}
+JOURNAL_FILE = "journal.csv"
+DEFAULT_TICKERS = ["AAPL", "GOOGL", "META"]
+COLOR_PALETTE = [
+    "#378ADD", "#1D9E75", "#D85A30", "#9B59B6",
+    "#F39C12", "#1ABC9C", "#E74C3C", "#2ECC71",
+]
 
+# --- Sidebar: ticker input ---
+st.sidebar.title("Tickers")
+raw_input = st.sidebar.text_input(
+    "Enter comma-separated tickers",
+    value=", ".join(DEFAULT_TICKERS),
+)
+TICKERS = [t.strip().upper() for t in raw_input.split(",") if t.strip()]
+if not TICKERS:
+    TICKERS = DEFAULT_TICKERS
+COLORS = {t: COLOR_PALETTE[i % len(COLOR_PALETTE)] for i, t in enumerate(TICKERS)}
+
+
+# --- Data fetching ---
 @st.cache_data(ttl=300)
 def fetch_fundamentals(ticker):
     stock = yf.Ticker(ticker)
-    
-    # fast_info is more reliable than .info
     fi = stock.fast_info
 
     try:
@@ -57,14 +74,10 @@ def fetch_fundamentals(ticker):
 @st.cache_data(ttl=300)
 def fetch_history(ticker):
     stock = yf.Ticker(ticker)
-    return stock.history(period='1y')
+    return stock.history(period="1y")
 
-st.title("Stock Comparison Dashboard")
 
-with st.spinner("Fetching live data..."):
-    data = {t: fetch_fundamentals(t) for t in TICKERS}
-    history = {t: fetch_history(t) for t in TICKERS}
-
+# --- Helpers ---
 def fmt_mkt_cap(val):
     if val is None:
         return "N/A"
@@ -74,38 +87,61 @@ def fmt_mkt_cap(val):
         return f"${val/1e9:.2f}B"
     return f"${val/1e6:.2f}M"
 
+def load_journal():
+    if os.path.exists(JOURNAL_FILE):
+        return pd.read_csv(JOURNAL_FILE, dtype=str)
+    return pd.DataFrame(columns=["timestamp", "tickers", "note"])
+
+def save_journal_entry(tickers, note):
+    df = load_journal()
+    new_row = pd.DataFrame([{
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "tickers":   ", ".join(tickers),
+        "note":      note,
+    }])
+    df = pd.concat([df, new_row], ignore_index=True)
+    df.to_csv(JOURNAL_FILE, index=False)
+
+
+# --- Load data ---
+with st.spinner("Fetching live data..."):
+    data    = {t: fetch_fundamentals(t) for t in TICKERS}
+    history = {t: fetch_history(t) for t in TICKERS}
+
+
+# --- Metric cards ---
+st.title("Stock Comparison Dashboard")
 st.subheader("Fundamentals")
 cols = st.columns(len(TICKERS))
 for col, ticker in zip(cols, TICKERS):
     d = data[ticker]
     with col:
         st.markdown(f"### {ticker}")
-        st.metric("Price",          f"${d['price']}"        if d['price']          is not None else "N/A",
-                                    f"{d['change_pct']}%"   if d['change_pct']     is not None else None)
-        st.metric("P/E (Forward)",  d['pe']                 if d['pe']             is not None else "N/A")
-        st.metric("EPS",            f"${d['eps']}"          if d['eps']            is not None else "N/A")
-        st.metric("Revenue Growth", f"{d['revenue_growth']}%" if d['revenue_growth'] is not None else "N/A")
-        st.metric("Net Margin",     f"{d['net_margin']}%"   if d['net_margin']     is not None else "N/A")
-        st.metric("Market Cap",     fmt_mkt_cap(d['mkt_cap']))
+        st.metric("Price",          f"${d['price']}"           if d["price"]          is not None else "N/A",
+                                    f"{d['change_pct']}%"      if d["change_pct"]     is not None else None)
+        st.metric("P/E (Forward)",  d["pe"]                    if d["pe"]             is not None else "N/A")
+        st.metric("EPS",            f"${d['eps']}"             if d["eps"]            is not None else "N/A")
+        st.metric("Revenue Growth", f"{d['revenue_growth']}%"  if d["revenue_growth"] is not None else "N/A")
+        st.metric("Net Margin",     f"{d['net_margin']}%"      if d["net_margin"]     is not None else "N/A")
+        st.metric("Market Cap",     fmt_mkt_cap(d["mkt_cap"]))
 
+
+# --- 1-Year price performance line chart ---
 st.subheader("1-Year Price Performance")
-
-fig = go.Figure()
-
+fig_line = go.Figure()
 for ticker in TICKERS:
     df = history[ticker]
-    # normalize to % return from start so all 3 are comparable
-    df_normalized = (df["Close"] / df["Close"].iloc[0] - 1) * 100
-
-    fig.add_trace(go.Scatter(
+    if df.empty:
+        continue
+    df_norm = (df["Close"] / df["Close"].iloc[0] - 1) * 100
+    fig_line.add_trace(go.Scatter(
         x=df.index,
-        y=df_normalized.round(2),
+        y=df_norm.round(2),
         name=ticker,
         line=dict(color=COLORS[ticker], width=2),
-        hovertemplate=f"<b>{ticker}</b><br>Date: %{{x|%b %d, %Y}}<br>Return: %{{y:.2f}}%<extra></extra>"
+        hovertemplate=f"<b>{ticker}</b><br>Date: %{{x|%b %d, %Y}}<br>Return: %{{y:.2f}}%<extra></extra>",
     ))
-
-fig.update_layout(
+fig_line.update_layout(
     yaxis_title="Return (%)",
     xaxis_title="Date",
     hovermode="x unified",
@@ -113,7 +149,53 @@ fig.update_layout(
     margin=dict(l=0, r=0, t=40, b=0),
     height=400,
 )
+fig_line.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.4)
+st.plotly_chart(fig_line, use_container_width=True)
 
-fig.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.4)
 
-st.plotly_chart(fig, use_container_width=True)
+# --- Bar chart metric comparison ---
+st.subheader("Metric Comparison")
+METRIC_OPTIONS = {
+    "P/E Ratio (Forward)": "pe",
+    "EPS":                 "eps",
+    "Revenue Growth (%)":  "revenue_growth",
+    "Net Margin (%)":      "net_margin",
+}
+selected_label  = st.selectbox("Select metric", list(METRIC_OPTIONS.keys()))
+selected_metric = METRIC_OPTIONS[selected_label]
+
+bar_tickers = [t for t in TICKERS if data[t][selected_metric] is not None]
+bar_values  = [data[t][selected_metric] for t in bar_tickers]
+bar_colors  = [COLORS[t] for t in bar_tickers]
+
+fig_bar = go.Figure(go.Bar(
+    x=bar_tickers,
+    y=bar_values,
+    marker_color=bar_colors,
+    text=[str(v) for v in bar_values],
+    textposition="outside",
+))
+fig_bar.update_layout(
+    yaxis_title=selected_label,
+    margin=dict(l=0, r=0, t=40, b=0),
+    height=350,
+    showlegend=False,
+)
+st.plotly_chart(fig_bar, use_container_width=True)
+
+
+# --- Investment journal ---
+st.subheader("Investment Journal")
+
+with st.form("journal_form", clear_on_submit=True):
+    note = st.text_area("Add a note about your market reasoning")
+    submitted = st.form_submit_button("Save entry")
+    if submitted and note.strip():
+        save_journal_entry(TICKERS, note.strip())
+        st.success("Entry saved.")
+
+journal_df = load_journal()
+if not journal_df.empty:
+    for _, row in journal_df.iloc[::-1].iterrows():
+        with st.expander(f"{row['timestamp']}  —  {row['tickers']}"):
+            st.write(row["note"])
