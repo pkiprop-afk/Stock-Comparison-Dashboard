@@ -6,7 +6,7 @@ import pandas as pd
 st.set_page_config(page_title="Stock Dashboard", layout="wide")
 
 TICKERS = ["APPL", "GOOGL", "META"]
-COLORS = {"APPL": "#378ADD", "GOOGL", "#1D9E75", "META": "#D85A30"}
+COLORS = {"APPL": "#378ADD", "GOOGL": "#1D9E75", "META": "#D85A30"}
 
 @st.cache_data(ttl=300)
 def fetch_fundamentals(ticker):
@@ -31,3 +31,9 @@ def fetch_history(ticker):
 
 st.title("Stock Comparison Dashboard")
 
+with st.spinner("Fetching live data..."):
+    data = {t: fetch_fundamentals(t) for t in TICKERS}
+    history = {t: fetch_history(t) for t in TICKERS}
+
+st.success("Data loaded!")
+st.write(data["AAPL"])
