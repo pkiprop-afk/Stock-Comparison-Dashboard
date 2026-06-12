@@ -302,6 +302,91 @@ st.plotly_chart(fig_line, use_container_width=True)
 
 
 # ---------------------------------------------------------------------------
+# RSI chart (conditional)
+# ---------------------------------------------------------------------------
+if "RSI (14-day)" in selected_indicators:
+    st.subheader("RSI — 14-Day Relative Strength Index")
+    fig_rsi = go.Figure()
+
+    for ticker in TICKERS:
+        df = history[ticker]
+        if df.empty:
+            continue
+        rsi = compute_rsi(df["Close"])
+        fig_rsi.add_trace(go.Scatter(
+            x=df.index,
+            y=rsi,
+            name=ticker,
+            line=dict(color=COLORS[ticker], width=1.5),
+            hovertemplate=f"<b>{ticker}</b><br>Date: %{{x|%b %d, %Y}}<br>RSI: %{{y:.1f}}<extra></extra>",
+        ))
+
+    fig_rsi.add_hline(y=70, line_dash="dash", line_color="red",  opacity=0.5,
+                      annotation_text="Overbought (70)", annotation_position="top left")
+    fig_rsi.add_hline(y=30, line_dash="dash", line_color="green", opacity=0.5,
+                      annotation_text="Oversold (30)", annotation_position="bottom left")
+    fig_rsi.update_layout(
+        yaxis=dict(title="RSI", range=[0, 100]),
+        xaxis_title="Date",
+        hovermode="x unified",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+        margin=dict(l=0, r=0, t=40, b=0),
+        height=300,
+    )
+    st.plotly_chart(fig_rsi, use_container_width=True)
+
+
+# ---------------------------------------------------------------------------
+# MACD chart (conditional)
+# ---------------------------------------------------------------------------
+if "MACD" in selected_indicators:
+    st.subheader("MACD — 12/26/9")
+
+    for ticker in TICKERS:
+        df = history[ticker]
+        if df.empty:
+            continue
+
+        macd_line, signal_line, histogram = compute_macd(df["Close"])
+        color = COLORS[ticker]
+
+        fig_macd = go.Figure()
+        fig_macd.add_trace(go.Scatter(
+            x=df.index, y=macd_line,
+            name="MACD",
+            line=dict(color=color, width=1.5),
+            hovertemplate="MACD: %{y:.4f}<extra></extra>",
+        ))
+        fig_macd.add_trace(go.Scatter(
+            x=df.index, y=signal_line,
+            name="Signal",
+            line=dict(color="#AAAAAA", width=1.5, dash="dash"),
+            hovertemplate="Signal: %{y:.4f}<extra></extra>",
+        ))
+        # Histogram bars colored green (positive) / red (negative)
+        bar_colors = ["#1D9E75" if v >= 0 else "#D85A30" for v in histogram.fillna(0)]
+        fig_macd.add_trace(go.Bar(
+            x=df.index, y=histogram,
+            name="Histogram",
+            marker_color=bar_colors,
+            opacity=0.5,
+            hovertemplate="Hist: %{y:.4f}<extra></extra>",
+        ))
+        fig_macd.add_hline(y=0, line_color="gray", opacity=0.4)
+        fig_macd.update_layout(
+            title=dict(text=ticker, font=dict(color=color)),
+            yaxis_title="Value",
+            xaxis_title="Date",
+            hovermode="x unified",
+            barmode="overlay",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+            margin=dict(l=0, r=0, t=50, b=0),
+            height=300,
+        )
+        st.plotly_chart(fig_macd, use_container_width=True)
+
+
+# ---------------------------------------------------------------------------
 # Bar chart metric comparison
 # ---------------------------------------------------------------------------
 st.subheader("Metric Comparison")
