@@ -458,6 +458,81 @@ else:
 
 
 # ---------------------------------------------------------------------------
+# Portfolio Allocation Optimizer
+# ---------------------------------------------------------------------------
+st.subheader("Portfolio Allocation Optimizer")
+
+# Default weights that sum to exactly 100 regardless of ticker count
+_base      = 100 // len(TICKERS)
+_remainder = 100 - _base * len(TICKERS)
+_defaults  = {t: float(_base + (1 if i < _remainder else 0)) for i, t in enumerate(TICKERS)}
+
+weight_cols = st.columns(len(TICKERS))
+weights = {}
+for col, ticker in zip(weight_cols, TICKERS):
+    with col:
+        weights[ticker] = st.number_input(
+            f"{ticker} (%)",
+            min_value=0.0,
+            max_value=100.0,
+            value=_defaults[ticker],
+            step=1.0,
+            key=f"weight_{ticker}",
+        )
+
+total_weight = sum(weights.values())
+if abs(total_weight - 100) < 0.1:
+    st.success(f"Total allocation: {total_weight:.1f}%")
+else:
+    st.warning(f"Total allocation: {total_weight:.1f}% — adjust weights to reach 100% to see results.")
+
+if abs(total_weight - 100) < 0.1:
+    # Build aligned daily-returns DataFrame from cached history
+    returns_df = pd.DataFrame({
+        t: history[t]["Close"].pct_change()
+        for t in TICKERS
+        if not history[t].empty
+    }).dropna()
+
+    # Weight vector
+    w = np.array([weights[t] / 100.0 for t in returns_df.columns])
+
+    # Annualised expected return vector and covariance matrix
+    mu  = returns_df.mean().values * 252
+    cov = returns_df.cov().values  * 252
+
+    port_return     = float(w @ mu)
+    port_volatility = math.sqrt(float(w @ cov @ w))
+    port_sharpe     = (port_return - RISK_FREE_RATE) / port_volatility \
+                      if port_volatility > 0 else None
+
+    left, right = st.columns([1, 1])
+
+    with left:
+        st.markdown("#### Simulated Portfolio Metrics")
+        st.metric("Expected Annual Return",    f"{port_return * 100:.2f}%")
+        st.metric("Annual Volatility (Risk)",  f"{port_volatility * 100:.2f}%")
+        st.metric("Portfolio Sharpe Ratio",
+                  f"{port_sharpe:.2f}" if port_sharpe is not None else "N/A")
+
+    with right:
+        fig_pie = go.Figure(go.Pie(
+            labels=list(weights.keys()),
+            values=list(weights.values()),
+            marker_colors=[COLORS[t] for t in weights],
+            hole=0.38,
+            textinfo="label+percent",
+            hovertemplate="<b>%{label}</b><br>Weight: %{value:.1f}%<extra></extra>",
+        ))
+        fig_pie.update_layout(
+            height=320,
+            margin=dict(l=0, r=0, t=10, b=0),
+            showlegend=False,
+        )
+        st.plotly_chart(fig_pie, use_container_width=True)
+
+
+# ---------------------------------------------------------------------------
 # Investment journal
 # ---------------------------------------------------------------------------
 st.subheader("Investment Journal")
