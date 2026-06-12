@@ -31,7 +31,7 @@ if not TICKERS:
     TICKERS = DEFAULT_TICKERS
 COLORS = {t: COLOR_PALETTE[i % len(COLOR_PALETTE)] for i, t in enumerate(TICKERS)}
 
-INDICATOR_OPTIONS  = ["20-day SMA", "50-day SMA", "Lower/Upper Bollinger Bands"]
+INDICATOR_OPTIONS  = ["20-day SMA", "50-day SMA", "Lower/Upper Bollinger Bands", "RSI (14-day)", "MACD"]
 selected_indicators = st.sidebar.multiselect("Select Technical Indicators", INDICATOR_OPTIONS)
 
 
@@ -118,6 +118,29 @@ def compute_risk_metrics(df, market_df):
         beta = None
 
     return sharpe, mdd, beta
+
+
+# ---------------------------------------------------------------------------
+# Technical indicator calculations
+# ---------------------------------------------------------------------------
+def compute_rsi(close, period=14):
+    delta     = close.diff()
+    gain      = delta.clip(lower=0)
+    loss      = -delta.clip(upper=0)
+    # Wilder's smoothing via EWM (alpha = 1/period, adjust=False)
+    avg_gain  = gain.ewm(alpha=1 / period, min_periods=period, adjust=False).mean()
+    avg_loss  = loss.ewm(alpha=1 / period, min_periods=period, adjust=False).mean()
+    rs        = avg_gain / avg_loss.replace(0, float("nan"))
+    return (100 - (100 / (1 + rs))).round(2)
+
+
+def compute_macd(close, fast=12, slow=26, signal=9):
+    ema_fast    = close.ewm(span=fast, adjust=False).mean()
+    ema_slow    = close.ewm(span=slow, adjust=False).mean()
+    macd_line   = (ema_fast - ema_slow).round(4)
+    signal_line = macd_line.ewm(span=signal, adjust=False).mean().round(4)
+    histogram   = (macd_line - signal_line).round(4)
+    return macd_line, signal_line, histogram
 
 
 # ---------------------------------------------------------------------------
